@@ -1,6 +1,10 @@
 #include <obs-module.h>
 #include <graphics/image-file.h>
+#include <graphics\matrix4.h>
+#include <graphics\axisang.h>
 #include <util/dstr.h>
+#include "transform-filter.h"
+
 
 struct lut_filter_data {
 	obs_source_t                   *context;
@@ -10,6 +14,7 @@ struct lut_filter_data {
 	struct vec3					   image_normal;
 	float						   fov_h;
 	float						   fov_v;
+	float						   image_ratio;
 };
 
 static const char *transform_filter_get_name(void *unused)
@@ -22,25 +27,45 @@ static void transform_filter_update(void *data, obs_data_t *settings)
 {
 	struct lut_filter_data *filter = data;
 
+	double width = obs_data_get_double(settings, "width");
+	double height = obs_data_get_double(settings, "height");
+
 	double pos_x = obs_data_get_double(settings, "pos_x");
 	double pos_y = obs_data_get_double(settings, "pos_y");
 	double pos_z = obs_data_get_double(settings, "pos_z");
 
-	double normal_x = obs_data_get_double(settings, "normal_x");
-	double normal_y = obs_data_get_double(settings, "normal_y");
-	double normal_z = obs_data_get_double(settings, "normal_z");
+	double angle_x = RAD(obs_data_get_double(settings, "angle_x"));
+	double angle_y = RAD(obs_data_get_double(settings, "angle_y"));
+	double angle_z = RAD(obs_data_get_double(settings, "angle_z"));
 
 	double fov_h = obs_data_get_double(settings, "fov_h");
 	double fov_v = obs_data_get_double(settings, "fov_v");
 
+
+	struct matrix4 rotM;
+
+	struct axisang angles;
+
+	axisang_set(&angles, (float)angle_x, (float)angle_y, (float)angle_z, 1.0);
+
+	matrix4_from_axisang(&rotM, &angles);
+
+	struct vec4 dir;
+	vec4_set(&dir, 0, -1, 0, 1);
+
+	struct vec4 result;
+	vec4_transform(&result, &dir, &rotM);
+
 	obs_enter_graphics();
+
+	filter->image_ratio = (float)height / (float)width;
 
 	
 	filter->fov_h = (float)fov_h;
 	filter->fov_v = (float)fov_v;
 
 	vec3_set(&filter->image_pos, (float)pos_x, (float)pos_y, (float)pos_z);
-	vec3_set(&filter->image_normal, (float)normal_x, (float)normal_y, (float)normal_z);
+	vec3_set(&filter->image_normal, (float)result.x, (float)result.y, (float)result.z);
 
 	char *effect_path = obs_module_file("transform_filter.effect");
 	gs_effect_destroy(filter->effect);
@@ -52,13 +77,17 @@ static void transform_filter_update(void *data, obs_data_t *settings)
 
 static void transform_filter_defaults(obs_data_t *settings)
 {
-	obs_data_set_default_double(settings, "pos_x", 1);
-	obs_data_set_default_double(settings, "pos_y", 0);
+
+	obs_data_set_default_double(settings, "width", 1920);
+	obs_data_set_default_double(settings, "height", 1080);
+
+	obs_data_set_default_double(settings, "pos_x", 0);
+	obs_data_set_default_double(settings, "pos_y", 1);
 	obs_data_set_default_double(settings, "pos_z", 0);
 
-	obs_data_set_default_double(settings, "normal_x", 0);
-	obs_data_set_default_double(settings, "normal_y", 1);
-	obs_data_set_default_double(settings, "normal_z", 0);
+	obs_data_set_default_double(settings, "angle_x", 0);
+	obs_data_set_default_double(settings, "angle_y", 0);
+	obs_data_set_default_double(settings, "angle_z", 0);
 
 	obs_data_set_default_double(settings, "fov_h", 3.1415);
 	obs_data_set_default_double(settings, "fov_v", 3.1415);
@@ -73,16 +102,19 @@ static obs_properties_t *transform_filter_properties(void *data)
 
 	obs_properties_t *props = obs_properties_create();
 
-	obs_properties_add_float_slider(props, "pos_x", "Pos X", -100, 100, 0.01);
-	obs_properties_add_float_slider(props, "pos_y", "Pos Y", -100, 100, 0.01);
-	obs_properties_add_float_slider(props, "pos_z", "Pos Z", -100, 100, 0.01);
+	obs_properties_add_float(props, "width", "Image width", 0, 64000, 1);
+	obs_properties_add_float(props, "height", "Image height", 0, 64000, 1);
 
-	obs_properties_add_float_slider(props, "normal_x", "Normal X", -100, 100, 0.01);
-	obs_properties_add_float_slider(props, "normal_y", "Normal Y", -100, 100, 0.01);
-	obs_properties_add_float_slider(props, "normal_z", "Normal Z", -100, 100, 0.01);
+	obs_properties_add_float_slider(props, "pos_x", "Pos X", -100, 100, 0.001);
+	obs_properties_add_float_slider(props, "pos_y", "Pos Y", -100, 100, 0.001);
+	obs_properties_add_float_slider(props, "pos_z", "Pos Z", -100, 100, 0.001);
 
-	obs_properties_add_float_slider(props, "fov_h", "Fov H", 0, M_PI*2.0, 0.01);
-	obs_properties_add_float_slider(props, "fov_v", "Fov V", 0, M_PI*2.0, 0.01);
+	obs_properties_add_float_slider(props, "angle_x", "Angle X", -180, 180, 0.001);
+	obs_properties_add_float_slider(props, "angle_y", "Angle Y", -180, 180, 0.001);
+	obs_properties_add_float_slider(props, "angle_z", "Angle Z", -180, 180, 0.001);
+
+	obs_properties_add_float_slider(props, "fov_h", "Fov H", 0, M_PI*2.0, 0.001);
+	obs_properties_add_float_slider(props, "fov_v", "Fov V", 0, M_PI*2.0, 0.001);
 
 
 
@@ -138,6 +170,8 @@ static void transform_filter_render(void *data, gs_effect_t *effect)
 	param = gs_effect_get_param_by_name(filter->effect, "fov_v");
 	gs_effect_set_float(param, filter->fov_v);
 
+	param = gs_effect_get_param_by_name(filter->effect, "image_ratio");
+	gs_effect_set_float(param, filter->image_ratio);
 
 
 	obs_source_process_filter_end(filter->context, filter->effect, 0, 0);
