@@ -869,6 +869,8 @@ EXPORT void obs_source_enum_filters(obs_source_t *source,
 EXPORT obs_source_t *obs_source_get_filter_by_name(obs_source_t *source,
 		const char *name);
 
+EXPORT void obs_source_copy_filters(obs_source_t *dst, obs_source_t *src);
+
 EXPORT bool obs_source_enabled(const obs_source_t *source);
 EXPORT void obs_source_set_enabled(obs_source_t *source, bool enabled);
 
@@ -1387,12 +1389,6 @@ EXPORT signal_handler_t *obs_output_get_signal_handler(
 
 /** Returns the procedure handler for an output */
 EXPORT proc_handler_t *obs_output_get_proc_handler(const obs_output_t *output);
-
-/**
- * Sets the current video media context associated with this output,
- * required for non-encoded outputs
- */
-EXPORT void obs_output_set_video(obs_output_t *output, video_t *video);
 
 /**
  * Sets the current audio/video media contexts associated with this output,
