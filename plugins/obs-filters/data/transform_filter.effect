@@ -1,0 +1,152 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+
+uniform float3 image_pos;
+uniform float3 image_normal;
+uniform float fov_h;
+uniform float fov_v;
+
+sampler_state textureSampler {
+	Filter    = Linear;
+	AddressU  = Clamp;
+	AddressV  = Clamp;
+};
+
+struct VertDataIn {
+	float4 pos : POSITION;
+	float2 uv  : TEXCOORD0;
+};
+
+struct VertDataOut {
+	float4 pos : POSITION;
+	float2 uv  : TEXCOORD0;
+};
+
+struct Camera {
+				float3 O;
+				float3 R;
+				float3 U;
+				float3 D;
+			};
+
+//Function to cast a ray through a given coordinate (uv) on the image plane.
+//It returns the direction of a 3D Ray.
+//Note : screen center is uv=[0,0]
+float3 ray(float2 uv, Camera cam)
+{
+    return normalize(uv.x*cam.R+uv.y*cam.U+cam.D);
+}
+
+//Function which does the opposite of the previous function:
+//It receives a 3D world space position, then flattens it on the image plane 
+//and returns its [uv] coordinates.
+//Note : screen center is uv=[0,0]
+float2 camProj(Camera cam, float3 p)
+{
+
+    p = p-cam.O;
+    float cZ = dot(p,cam.D);
+    float cX = dot(p,cam.R);
+	float cY = dot(p,cam.U);
+    return float2(cX/cZ,cY/cZ);
+}
+
+//Utility function to compute the distance along a ray to reach a plane, in 3D.
+//The value returned is the distance along ray to the plane intersection.
+//o = ray origin
+//d = ray direction
+//po = plane origin
+//pn = plane normal
+float rayPlaneIntersec(float3 o, float3 d, float3 po, float3 pn) 
+{
+    //Same principle as lineLineIntersection() :
+    //"How far is the plane"/"approach rate".
+    //No need to normalize pn, as dot product above and under cancel out and do not scale the result.
+    return dot(po-o,pn)/dot(d,pn);
+}		
+			
+VertDataOut VSDefault(VertDataIn v_in)
+{
+	VertDataOut vert_out;
+	vert_out.uv = v_in.uv;
+	vert_out.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+	return vert_out;
+}
+
+float4 Transform(VertDataOut v_in) : TARGET
+{
+	//float4 textureColor = image.Sample(textureSampler, v_in.uv);
+	
+	float2 pfish;
+	float theta, phi, rh, rv;
+	float3 psph;
+
+	//fixed4 col = tex2D(_PosterTex, i.uv2);
+	float4 col = float4(1.0, 1.0, 0.0, 0.0);
+
+	float dx = v_in.uv.x;
+	float dy = v_in.uv.y;
+
+	// Polar angles
+	theta = 6.2831853 * (dx - 0.5); // -pi to pi
+	phi = 3.14159265 * (dy - 0.5);	// -pi/2 to pi/2
+
+		// Vector in 3D space
+	psph.x = cos(phi) * sin(theta);
+	psph.y = cos(phi) * cos(theta);
+	psph.z = sin(phi);
+
+	// Calculate fisheye angle and radius
+	theta = atan2(psph.z, psph.x);
+	phi = atan2(sqrt(psph.x*psph.x + psph.z*psph.z), psph.y);
+	rh = phi / fov_h;
+	rv = phi / fov_v;
+
+	// Pixel in fisheye space
+	pfish.x = 0.5 + rh * cos(theta);
+	pfish.y = 0.5 + rv * sin(theta);
+
+	
+	//if (pfish.x >= 0 && pfish.x <= 1.0 && pfish.y >= 0 && pfish.y < 1 && col.a < 0.99) { // 
+		//col = image.Sample(textureSampler, pfish);
+	//}
+	
+	Camera cam;
+	cam.O = float3 (0, 0, 0);
+	cam.R = float3 (1, 0, 0);
+	cam.U = float3 (0, 1, 0);
+	cam.D = float3 (0, 0, -1);
+
+
+	Camera perspectiveCam;
+	perspectiveCam.U = normalize(cross(image_normal, float3(1,0.0,0.0)));
+	perspectiveCam.D = normalize(image_normal);
+	perspectiveCam.R = normalize(cross(perspectiveCam.D, perspectiveCam.U));
+	perspectiveCam.O = image_pos + normalize(image_normal)*-10.0;
+	
+	float3 o = float3(0,0,0);
+	float3 d = psph;// ray(i.uv, cam);
+
+
+	float t = rayPlaneIntersec(o,d, image_pos, image_normal);
+	if(t>0.0){
+		float3 pImage = o+t*d;
+		float2 puv = camProj(perspectiveCam, pImage);
+		if (puv.x < 0.5 && puv.y < 0.5 && puv.x > -0.5 && puv.y > -0.5) {
+		//col = float4(t, t, t, 1);
+			//col = tex2D(_Image2D, puv+0.5);
+			col = image.Sample(textureSampler, puv+0.5);
+		}
+	}
+	
+	return col;
+}
+
+technique Draw
+{
+	pass
+	{
+		vertex_shader = VSDefault(v_in);
+		pixel_shader  = Transform(v_in);
+	}
+}
