@@ -3,7 +3,6 @@
 #include <graphics\matrix4.h>
 #include <graphics\axisang.h>
 #include <util/dstr.h>
-#include "transform-filter.h"
 
 
 struct lut_filter_data {
@@ -89,8 +88,9 @@ static void transform_filter_defaults(obs_data_t *settings)
 	obs_data_set_default_double(settings, "angle_y", 0);
 	obs_data_set_default_double(settings, "angle_z", 0);
 
-	obs_data_set_default_double(settings, "fov_h", 3.1415);
-	obs_data_set_default_double(settings, "fov_v", 3.1415);
+	obs_data_set_default_double(settings, "phi", 0.0);
+	obs_data_set_default_double(settings, "theta", 0.0);
+	obs_data_set_default_double(settings, "radius", 1.0);
 
 }
 
