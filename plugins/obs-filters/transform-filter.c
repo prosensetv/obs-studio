@@ -11,8 +11,9 @@ struct lut_filter_data {
 
 	struct vec3					   image_pos;
 	struct vec3					   image_normal;
-	float						   fov_h;
-	float						   fov_v;
+	float						   radius;
+	float						   phi;
+	float						   theta;
 	float						   image_ratio;
 };
 
@@ -37,9 +38,9 @@ static void transform_filter_update(void *data, obs_data_t *settings)
 	double angle_y = RAD(obs_data_get_double(settings, "angle_y"));
 	double angle_z = RAD(obs_data_get_double(settings, "angle_z"));
 
-	double fov_h = obs_data_get_double(settings, "fov_h");
-	double fov_v = obs_data_get_double(settings, "fov_v");
-
+	double radius = obs_data_get_double(settings, "radius");
+	double phi = obs_data_get_double(settings, "phi");
+	double theta = obs_data_get_double(settings, "theta");
 
 	struct matrix4 rotM;
 
@@ -60,9 +61,14 @@ static void transform_filter_update(void *data, obs_data_t *settings)
 	filter->image_ratio = (float)height / (float)width;
 
 	
-	filter->fov_h = (float)fov_h;
-	filter->fov_v = (float)fov_v;
+	filter->radius = (float)radius;
+	filter->phi = (float)phi;
+	filter->theta = (float)theta;
 
+	pos_x = radius*sin(phi)*cos(theta);
+	pos_y = radius*sin(phi)*sin(theta);
+	pos_z = radius*cos(phi);
+	
 	vec3_set(&filter->image_pos, (float)pos_x, (float)pos_y, (float)pos_z);
 	vec3_set(&filter->image_normal, (float)result.x, (float)result.y, (float)result.z);
 
@@ -88,10 +94,9 @@ static void transform_filter_defaults(obs_data_t *settings)
 	obs_data_set_default_double(settings, "angle_y", 0);
 	obs_data_set_default_double(settings, "angle_z", 0);
 
+	obs_data_set_default_double(settings, "radius", 1.0);
 	obs_data_set_default_double(settings, "phi", 0.0);
 	obs_data_set_default_double(settings, "theta", 0.0);
-	obs_data_set_default_double(settings, "radius", 1.0);
-
 }
 
 static obs_properties_t *transform_filter_properties(void *data)
@@ -113,10 +118,9 @@ static obs_properties_t *transform_filter_properties(void *data)
 	obs_properties_add_float_slider(props, "angle_y", "Angle Y", -180, 180, 0.001);
 	obs_properties_add_float_slider(props, "angle_z", "Angle Z", -180, 180, 0.001);
 
-	obs_properties_add_float_slider(props, "fov_h", "Fov H", 0, M_PI*2.0, 0.001);
-	obs_properties_add_float_slider(props, "fov_v", "Fov V", 0, M_PI*2.0, 0.001);
-
-
+	obs_properties_add_float_slider(props, "radius", "Radius", 0, 100, 0.001);
+	obs_properties_add_float_slider(props, "phi", "Phi", 0, M_PI, 0.001);
+	obs_properties_add_float_slider(props, "theta", "Theta", 0, M_PI*2.0, 0.001);
 
 	UNUSED_PARAMETER(data);
 	return props;
@@ -164,11 +168,6 @@ static void transform_filter_render(void *data, gs_effect_t *effect)
 	gs_effect_set_vec3(param, &filter->image_pos);
 	param = gs_effect_get_param_by_name(filter->effect, "image_normal");
 	gs_effect_set_vec3(param, &filter->image_normal);
-
-	param = gs_effect_get_param_by_name(filter->effect, "fov_h");
-	gs_effect_set_float(param, filter->fov_h);
-	param = gs_effect_get_param_by_name(filter->effect, "fov_v");
-	gs_effect_set_float(param, filter->fov_v);
 
 	param = gs_effect_get_param_by_name(filter->effect, "image_ratio");
 	gs_effect_set_float(param, filter->image_ratio);
